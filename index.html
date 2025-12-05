@@ -94,6 +94,7 @@
                                             <div class="zf-clearBoth"></div>
                                             <p id="Date_error" class="zf-errorMessage" style="display: none;">Please
                                                 Enter Correct Details</p>
+                                            <p id="Date_age_error" class="zf-errorMessage" style="display: none;">You must be at least 18 years old to submit this form.</p>
                                         </div>
                                         <div class="zf-clearBoth"></div>
                                     </div>
@@ -450,14 +451,114 @@
     <!-- Flatpickr JS -->
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script>
+        let dobPickerInstance = null;
+
         function initDOBPicker() {
-            flatpickr("#Dob", {
+            const dobInput = document.getElementById("Dob");
+            if (!dobInput) return;
+            
+            dobPickerInstance = flatpickr("#Dob", {
                 dateFormat: "d-M-Y",
                 maxDate: "today",
-                disableMobile: true
+                disableMobile: true,
+                onChange: function(selectedDates, dateStr, instance) {
+                    validateAge(selectedDates[0]);
+                }
+            });
+            
+            // Also validate on manual input
+            dobInput.addEventListener('change', function() {
+                if (dobPickerInstance && dobPickerInstance.selectedDates.length > 0) {
+                    validateAge(dobPickerInstance.selectedDates[0]);
+                } else {
+                    validateAge(null);
+                }
+            });
+            dobInput.addEventListener('blur', function() {
+                if (dobPickerInstance && dobPickerInstance.selectedDates.length > 0) {
+                    validateAge(dobPickerInstance.selectedDates[0]);
+                } else {
+                    validateAge(null);
+                }
             });
         }
 
+        function calculateAge(birthDate) {
+            if (!birthDate) return null;
+            
+            // If it's already a Date object, use it directly
+            if (birthDate instanceof Date) {
+                const today = new Date();
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const monthDiff = today.getMonth() - birthDate.getMonth();
+                
+                if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                
+                return age;
+            }
+            
+            // Fallback: parse string format (d-M-Y, e.g., "1-Jan-2000")
+            if (typeof birthDate === 'string') {
+                const months = {
+                    'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                    'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+                };
+                
+                const parts = birthDate.split('-');
+                if (parts.length !== 3) return null;
+                
+                const day = parseInt(parts[0], 10);
+                const month = months[parts[1]];
+                const year = parseInt(parts[2], 10);
+                
+                if (isNaN(day) || isNaN(year) || month === undefined) return null;
+                
+                const dateObj = new Date(year, month, day);
+                return calculateAge(dateObj);
+            }
+            
+            return null;
+        }
+
+        function validateAge(birthDate) {
+            const dobInput = document.getElementById("Dob");
+            const ageError = document.getElementById("Date_age_error");
+            
+            if (!dobInput || !ageError) return false;
+            
+            // If no birthDate provided, try to get it from the picker instance
+            if (!birthDate && dobPickerInstance && dobPickerInstance.selectedDates.length > 0) {
+                birthDate = dobPickerInstance.selectedDates[0];
+            }
+            
+           
+            if (!birthDate) {
+                const dobValue = dobInput.value.trim();
+                if (!dobValue) {
+                    ageError.style.display = "none";
+                    return true; // Let other validations handle empty field
+                }
+                birthDate = dobValue;
+            }
+            
+            const age = calculateAge(birthDate);
+            
+            if (age === null) {
+               
+                ageError.style.display = "none";
+                return true;
+            }
+            
+            if (age < 18) {
+                ageError.style.display = "block";
+                return false;
+            } else {
+                ageError.style.display = "none";
+                return true;
+            }
+        }
            
         initDOBPicker();
 
@@ -566,6 +667,16 @@ async function customValidateAndSubmit(event) {
     //   console.log("Zoho native validation failed");
       return false;
     }
+  }
+
+  // Validate age before submission
+  if (!validateAge()) {
+    // console.log("Age validation failed - blocking submit");
+    const dobInput = document.getElementById("Dob");
+    if (dobInput) {
+      dobInput.focus();
+    }
+    return false;
   }
 
   if (!(await validate_Email())) {    
